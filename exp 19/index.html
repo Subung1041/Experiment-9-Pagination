@@ -1,0 +1,82 @@
+<?php
+include 'db_connect.php';
+
+// Number of posts per page
+$limit = 5;
+
+// Get current page from URL, default = 1
+$page = isset($_GET['page']) && is_numeric($_GET['page']) ? (int)$_GET['page'] : 1;
+
+// Calculate the OFFSET
+$offset = ($page - 1) * $limit;
+
+// Count total records
+$totalResult = $conn->query("SELECT COUNT(*) as total FROM posts");
+$totalRow = $totalResult->fetch_assoc();
+$totalRecords = $totalRow['total'];
+
+// Calculate total pages
+$totalPages = ceil($totalRecords / $limit);
+
+// Fetch posts with LIMIT and OFFSET, join authors
+$stmt = $conn->prepare("
+    SELECT posts.id, posts.title, posts.content, posts.created_at, users.name AS author
+    FROM posts
+    INNER JOIN users ON posts.author_id = users.id
+    ORDER BY posts.created_at DESC
+    LIMIT ? OFFSET ?
+");
+$stmt->bind_param("ii", $limit, $offset);
+$stmt->execute();
+$result = $stmt->get_result();
+?>
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Paginated Posts</title>
+    <link rel="stylesheet" href="style.css"> <!-- optional -->
+</head>
+<body>
+<div class="container">
+    <h2>Blog Posts</h2>
+
+    <?php
+    if ($result->num_rows > 0) {
+        while ($row = $result->fetch_assoc()) {
+            echo "
+            <div class='post'>
+                <h3>{$row['title']}</h3>
+                <p class='meta'>By {$row['author']} | {$row['created_at']}</p>
+                <p>{$row['content']}</p>
+            </div>
+            ";
+        }
+    } else {
+        echo "<p>No posts found.</p>";
+    }
+    ?>
+
+    <!-- Pagination Links -->
+    <div class="pagination">
+        <?php if ($page > 1): ?>
+            <a href="?page=<?php echo $page - 1; ?>">&laquo; Previous</a>
+        <?php endif; ?>
+
+        <?php for ($i = 1; $i <= $totalPages; $i++): ?>
+            <a href="?page=<?php echo $i; ?>" 
+               class="<?php echo $i == $page ? 'active' : ''; ?>">
+               <?php echo $i; ?>
+            </a>
+        <?php endfor; ?>
+
+        <?php if ($page < $totalPages): ?>
+            <a href="?page=<?php echo $page + 1; ?>">Next &raquo;</a>
+        <?php endif; ?>
+    </div>
+</div>
+</body>
+</html>
+<?php
+$stmt->close();
+$conn->close();
+?>
